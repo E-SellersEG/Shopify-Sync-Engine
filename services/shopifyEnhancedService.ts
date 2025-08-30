@@ -51,12 +51,14 @@ class EnhancedShopifyClient {
     // Strategy 2: Try CORS proxies
     const proxyOptions = [
       'https://api.allorigins.win/raw?url=', // This one was working before
-      'https://cors-anywhere.herokuapp.com/',
+      'https://cors.bridged.cc/', // This one connected but returned HTML
       'https://thingproxy.freeboard.io/fetch/',
       'https://corsproxy.io/?',
       'https://cors.eu.org/?',
       'https://api.codetabs.com/v1/proxy?quest=',
-      'https://cors.bridged.cc/'
+      'https://cors-anywhere.herokuapp.com/',
+      'https://cors.io/?',
+      'https://api.codetabs.com/v1/proxy?quest='
     ];
 
     for (const proxy of proxyOptions) {
@@ -78,6 +80,8 @@ class EnhancedShopifyClient {
           proxyUrl = proxy + url;
         } else if (proxy === 'https://cors.bridged.cc/') {
           proxyUrl = proxy + url;
+        } else if (proxy === 'https://cors.io/?') {
+          proxyUrl = proxy + url;
         }
 
         const proxyResponse = await fetch(proxyUrl, {
@@ -93,8 +97,29 @@ class EnhancedShopifyClient {
           throw new Error(`Proxy ${proxy} failed: ${proxyResponse.status}`);
         }
 
-        console.log(`✅ CORS proxy ${proxy} successful!`);
-        return proxyResponse;
+        // Check if the response is actually valid JSON and not HTML
+        const responseText = await proxyResponse.text();
+        console.log(`🔍 Proxy ${proxy} response preview:`, responseText.substring(0, 200));
+        
+        // Check if response contains HTML (proxy error page)
+        if (responseText.includes('<html') || responseText.includes('<!DOCTYPE') || responseText.includes('<body')) {
+          throw new Error(`Proxy ${proxy} returned HTML instead of JSON - likely an error page`);
+        }
+        
+        // Try to parse as JSON to validate
+        try {
+          JSON.parse(responseText);
+          console.log(`✅ CORS proxy ${proxy} successful!`);
+          
+          // Return a new response object with the validated text
+          return new Response(responseText, {
+            status: proxyResponse.status,
+            statusText: proxyResponse.statusText,
+            headers: proxyResponse.headers
+          });
+        } catch (jsonError) {
+          throw new Error(`Proxy ${proxy} returned invalid JSON: ${jsonError}`);
+        }
       } catch (proxyError) {
         console.log(`❌ CORS proxy ${proxy} failed:`, proxyError);
         continue;
@@ -165,21 +190,46 @@ class EnhancedShopifyClient {
       console.log('🔄 Testing basic connection with minimal request...');
       
       // Try to make a very simple request to see if credentials work
-      const response = await fetch(`https://${this.storeDomain}/admin/api/2024-04/shop.json`, {
-        method: 'HEAD', // Just check headers, don't get full response
-        headers: {
-          'X-Shopify-Access-Token': this.accessToken,
-        },
-      });
+      const url = `https://${this.storeDomain}/admin/api/2024-04/shop.json`;
       
-      if (response.status === 200 || response.status === 401 || response.status === 403) {
-        // These status codes mean we can reach Shopify (even if unauthorized)
-        console.log('✅ Basic connection test successful - can reach Shopify');
-        return true;
-      } else {
-        console.log('❌ Basic connection test failed');
-        return false;
+      // Try direct first
+      try {
+        const response = await fetch(url, {
+          method: 'HEAD', // Just check headers, don't get full response
+          headers: {
+            'X-Shopify-Access-Token': this.accessToken,
+          },
+        });
+        
+        if (response.status === 200 || response.status === 401 || response.status === 403) {
+          // These status codes mean we can reach Shopify (even if unauthorized)
+          console.log('✅ Basic connection test successful - can reach Shopify directly');
+          return true;
+        }
+      } catch (directError) {
+        console.log('❌ Direct basic connection failed, trying with proxy...');
       }
+      
+      // Try with a reliable CORS proxy
+      try {
+        const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+        const proxyResponse = await fetch(proxyUrl, {
+          method: 'HEAD',
+          headers: {
+            'X-Requested-With': 'XMLHttpRequest',
+          },
+        });
+        
+        if (proxyResponse.ok) {
+          console.log('✅ Basic connection test successful via proxy - can reach Shopify');
+          return true;
+        }
+      } catch (proxyError) {
+        console.log('❌ Proxy basic connection also failed:', proxyError);
+      }
+      
+      console.log('❌ Basic connection test failed');
+      return false;
     } catch (error) {
       console.log('❌ Basic connection test error:', error);
       return false;
