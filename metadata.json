@@ -1,0 +1,5 @@
+{
+  "name": "(Website) Shopify Sync Engine",
+  "description": "A web-based dashboard to manage and synchronize product data with a Shopify store, using AI for mock data generation and analysis.",
+  "requestFramePermissions": []
+}
