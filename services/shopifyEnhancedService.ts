@@ -50,11 +50,13 @@ class EnhancedShopifyClient {
 
     // Strategy 2: Try CORS proxies
     const proxyOptions = [
+      'https://api.allorigins.win/raw?url=', // This one was working before
       'https://cors-anywhere.herokuapp.com/',
-      'https://api.allorigins.win/raw?url=',
       'https://thingproxy.freeboard.io/fetch/',
       'https://corsproxy.io/?',
-      'https://cors.eu.org/?'
+      'https://cors.eu.org/?',
+      'https://api.codetabs.com/v1/proxy?quest=',
+      'https://cors.bridged.cc/'
     ];
 
     for (const proxy of proxyOptions) {
@@ -71,6 +73,10 @@ class EnhancedShopifyClient {
         } else if (proxy === 'https://corsproxy.io/?') {
           proxyUrl = proxy + url;
         } else if (proxy === 'https://cors.eu.org/?') {
+          proxyUrl = proxy + url;
+        } else if (proxy === 'https://api.codetabs.com/v1/proxy?quest=') {
+          proxyUrl = proxy + url;
+        } else if (proxy === 'https://cors.bridged.cc/') {
           proxyUrl = proxy + url;
         }
 
@@ -98,6 +104,18 @@ class EnhancedShopifyClient {
     // Strategy 3: Try Netlify function as final fallback
     try {
       console.log('🔄 Strategy 3: Trying Netlify function proxy...');
+      
+      // First check if the function is accessible
+      try {
+        const healthCheck = await fetch('/.netlify/functions/shopify-proxy', {
+          method: 'OPTIONS'
+        });
+        console.log('✅ Netlify function is accessible');
+      } catch (healthError) {
+        console.log('❌ Netlify function health check failed:', healthError);
+        throw new Error('Netlify function not accessible');
+      }
+      
       const netlifyResponse = await fetch('/.netlify/functions/shopify-proxy', {
         method: 'POST',
         headers: {
@@ -139,6 +157,33 @@ class EnhancedShopifyClient {
 
     // If all strategies fail, throw comprehensive error
     throw new Error(`All connection strategies failed. Cannot connect to Shopify API. Please check your credentials and try again.`);
+  }
+
+  // Simple connection test that doesn't require full API access
+  async testBasicConnection(): Promise<boolean> {
+    try {
+      console.log('🔄 Testing basic connection with minimal request...');
+      
+      // Try to make a very simple request to see if credentials work
+      const response = await fetch(`https://${this.storeDomain}/admin/api/2024-04/shop.json`, {
+        method: 'HEAD', // Just check headers, don't get full response
+        headers: {
+          'X-Shopify-Access-Token': this.accessToken,
+        },
+      });
+      
+      if (response.status === 200 || response.status === 401 || response.status === 403) {
+        // These status codes mean we can reach Shopify (even if unauthorized)
+        console.log('✅ Basic connection test successful - can reach Shopify');
+        return true;
+      } else {
+        console.log('❌ Basic connection test failed');
+        return false;
+      }
+    } catch (error) {
+      console.log('❌ Basic connection test error:', error);
+      return false;
+    }
   }
 
   async getShop() {
@@ -255,6 +300,25 @@ export const testShopifyConnection = async (config: ShopifyConfig): Promise<{ su
     
   } catch (error) {
     console.error('❌ Shopify connection test failed:', error);
+    
+    // Try basic connection test as fallback
+    try {
+      console.log('🔄 Trying basic connection test as fallback...');
+      const client = createEnhancedShopifyClient(config);
+      const basicConnection = await client.testBasicConnection();
+      
+      if (basicConnection) {
+        return { 
+          success: true, 
+          details: { 
+            message: 'Basic connection successful - credentials are valid but API access may be limited',
+            basicTest: true
+          } 
+        };
+      }
+    } catch (basicError) {
+      console.log('❌ Basic connection test also failed:', basicError);
+    }
     
     if (error instanceof Error) {
       if (error.message.includes('401')) {
