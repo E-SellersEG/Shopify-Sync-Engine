@@ -144,13 +144,41 @@ class EnhancedShopifyClient {
   async getShop() {
     const response = await this.makeRequest('/shop.json');
     const data = await response.json();
-    return data.shop;
+    
+    console.log('🔍 Raw shop response data:', data);
+    console.log('🔍 Data type:', typeof data);
+    console.log('🔍 Data keys:', data ? Object.keys(data) : 'null/undefined');
+    
+    // Handle different response formats from proxies
+    if (data && data.shop) {
+      return data.shop;
+    } else if (data && typeof data === 'object') {
+      // Some proxies might return the data directly
+      return data;
+    } else {
+      console.warn('Unexpected shop data format:', data);
+      throw new Error('Invalid shop data format received from Shopify');
+    }
   }
 
   async getProducts(limit: number = 50) {
     const response = await this.makeRequest(`/products.json?limit=${limit}`);
     const data = await response.json();
-    return data.products || [];
+    
+    console.log('🔍 Raw products response data:', data);
+    console.log('🔍 Data type:', typeof data);
+    console.log('🔍 Data keys:', data ? Object.keys(data) : 'null/undefined');
+    
+    // Handle different response formats from proxies
+    if (data && Array.isArray(data.products)) {
+      return data.products;
+    } else if (data && Array.isArray(data)) {
+      // Some proxies might return the array directly
+      return data;
+    } else {
+      console.warn('Unexpected products data format:', data);
+      return []; // Return empty array instead of throwing
+    }
   }
 
   async updateInventory(inventoryItemId: string, locationId: string, quantity: number) {
