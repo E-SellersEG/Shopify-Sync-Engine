@@ -3,7 +3,7 @@ import { ShopifyConfig } from '../types';
 import Card from './Card';
 import { useAuth } from '../contexts/AuthContext';
 import { AppContext } from '../App';
-import { testShopifyConnection } from '../services/shopifySDKService';
+import { testShopifyConnection } from '../services/shopifyEnhancedService';
 
 const Settings: React.FC = () => {
   const { currentUser, updateUserConfig, cancelSubscription } = useAuth();

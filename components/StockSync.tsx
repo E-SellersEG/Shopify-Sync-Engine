@@ -3,7 +3,7 @@ import { AppContext } from '../App';
 import LogViewer from './LogViewer';
 import Card from './Card';
 import { useAuth } from '../contexts/AuthContext';
-import { fetchShopifyProducts, updateProductInventory, ShopifyProduct } from '../services/shopifySDKService';
+import { fetchShopifyProducts, updateProductInventory, ShopifyProduct } from '../services/shopifyEnhancedService';
 
 const StockSync: React.FC = () => {
   const context = useContext(AppContext);

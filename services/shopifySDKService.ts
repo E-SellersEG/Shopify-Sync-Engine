@@ -26,7 +26,18 @@ class ShopifyClient {
   private async makeRequest(endpoint: string, options: RequestInit = {}) {
     const url = `https://${this.storeDomain}/admin/api/2024-04${endpoint}`;
     
+    // Try multiple CORS proxies in sequence
+    const proxyOptions = [
+      'https://cors-anywhere.herokuapp.com/',
+      'https://api.allorigins.win/raw?url=',
+      'https://thingproxy.freeboard.io/fetch/',
+      'https://corsproxy.io/?',
+      'https://cors.eu.org/?'
+    ];
+
+    // First try direct request
     try {
+      console.log('Trying direct Shopify API request...');
       const response = await fetch(url, {
         ...options,
         headers: {
@@ -40,25 +51,52 @@ class ShopifyClient {
         throw new Error(`Shopify API error: ${response.status} ${response.statusText}`);
       }
 
+      console.log('Direct request successful!');
       return response;
     } catch (error) {
-      // If direct request fails due to CORS, try using a CORS proxy
-      console.log('Direct request failed, trying CORS proxy...');
+      console.log('Direct request failed, trying CORS proxies...');
       
-      const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
-      const proxyResponse = await fetch(proxyUrl, {
-        ...options,
-        headers: {
-          'Content-Type': 'application/json',
-          ...options.headers,
-        },
-      });
+      // Try each proxy until one works
+      for (const proxy of proxyOptions) {
+        try {
+          console.log(`Trying proxy: ${proxy}`);
+          let proxyUrl: string;
+          
+          if (proxy === 'https://cors-anywhere.herokuapp.com/') {
+            proxyUrl = proxy + url;
+          } else if (proxy === 'https://api.allorigins.win/raw?url=') {
+            proxyUrl = proxy + encodeURIComponent(url);
+          } else if (proxy === 'https://thingproxy.freeboard.io/fetch/') {
+            proxyUrl = proxy + url;
+          } else if (proxy === 'https://corsproxy.io/?') {
+            proxyUrl = proxy + url;
+          } else if (proxy === 'https://cors.eu.org/') {
+            proxyUrl = proxy + url;
+          }
 
-      if (!proxyResponse.ok) {
-        throw new Error(`Proxy request failed: ${proxyResponse.status} ${proxyResponse.statusText}`);
+          const proxyResponse = await fetch(proxyUrl, {
+            ...options,
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Requested-With': 'XMLHttpRequest',
+              ...options.headers,
+            },
+          });
+
+          if (!proxyResponse.ok) {
+            throw new Error(`Proxy ${proxy} failed: ${proxyResponse.status}`);
+          }
+
+          console.log(`Proxy ${proxy} successful!`);
+          return proxyResponse;
+        } catch (proxyError) {
+          console.log(`Proxy ${proxy} failed:`, proxyError);
+          continue; // Try next proxy
+        }
       }
-
-      return proxyResponse;
+      
+      // If all proxies fail, throw the original error
+      throw new Error(`All CORS proxies failed. Original error: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   }
 
@@ -125,7 +163,7 @@ export const updateProductInventory = async (
 
 export const testShopifyConnection = async (config: ShopifyConfig): Promise<{ success: boolean; error?: string; details?: any }> => {
   try {
-    console.log('Testing Shopify connection with SDK...');
+    console.log('Testing Shopify connection with enhanced CORS bypass...');
     const client = createShopifyClient(config);
     
     // Test shop endpoint
@@ -158,6 +196,9 @@ export const testShopifyConnection = async (config: ShopifyConfig): Promise<{ su
       }
       if (error.message.includes('404')) {
         return { success: false, error: 'Store not found - check if the store domain is correct' };
+      }
+      if (error.message.includes('CORS')) {
+        return { success: false, error: 'CORS blocked - all proxy attempts failed. This is a browser security limitation.' };
       }
       return { success: false, error: error.message };
     }
