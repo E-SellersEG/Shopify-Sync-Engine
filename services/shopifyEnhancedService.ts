@@ -26,6 +26,10 @@ class EnhancedShopifyClient {
   private async makeRequest(endpoint: string, options: RequestInit = {}) {
     const url = `https://${this.storeDomain}/admin/api/2024-04${endpoint}`;
     
+    console.log('🔍 DEBUG: Making request to:', url);
+    console.log('🔍 DEBUG: Using access token:', this.accessToken.substring(0, 20) + '...');
+    console.log('🔍 DEBUG: Store domain:', this.storeDomain);
+    
     // Strategy 1: Try direct request first
     try {
       console.log('🔄 Strategy 1: Trying direct Shopify API request...');
@@ -100,6 +104,8 @@ class EnhancedShopifyClient {
         // Check if the response is actually valid JSON and not HTML
         const responseText = await proxyResponse.text();
         console.log(`🔍 Proxy ${proxy} response preview:`, responseText.substring(0, 200));
+        console.log(`🔍 Proxy ${proxy} response status:`, proxyResponse.status);
+        console.log(`🔍 Proxy ${proxy} response headers:`, Object.fromEntries(proxyResponse.headers.entries()));
         
         // Check if response contains HTML (proxy error page)
         if (responseText.includes('<html') || responseText.includes('<!DOCTYPE') || responseText.includes('<body')) {
